@@ -1,0 +1,16 @@
+{
+	"connection": {
+		"realm": "",
+		"userToken": ""
+	},
+	"users": {
+		"dbid": "",
+		"fids": {
+			"recordid": 3,
+			"primaryKey": 3,
+			"username": 6,
+			"password": 7,
+			"active": 8
+		}
+	}
+}
