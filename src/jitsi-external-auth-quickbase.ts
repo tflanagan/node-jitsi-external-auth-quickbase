@@ -77,9 +77,10 @@ const parseLine = async (line: string): Promise<boolean> => {
 	const password = parts.slice(3).join(':');
 
 	switch(action){
-		case 'auth':    return auth(username, password);
-		case 'isuser':  return isUser(username);
-		case 'setpass': return setPass(username, password);
+		case 'auth':     return auth(username, password);
+		case 'isuser':   return isUser(username);
+		case 'setpass':  return setPass(username, password);
+		case 'register': return register(username, password);
 		default:        throw new Error(`Unknown prosody protocol send: ${line}`);
 	}
 };
@@ -129,6 +130,22 @@ const getUser = async (username: string) => {
 	}
 
 	return record;
+};
+
+const register = async (username: string, password: string) => {
+	const exists = await isUser(username);
+
+	if(exists){
+		throw new Error(`User ${username} already exists`);
+	}
+
+	await usersTable.upsertRecord({
+		username: username,
+		password: await hash(password, config.encryption.saltRounds),
+		active: true
+	}, true);
+
+	return true;
 };
 
 /* Bang */
