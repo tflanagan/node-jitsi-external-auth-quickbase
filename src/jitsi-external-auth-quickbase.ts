@@ -45,6 +45,7 @@ const config = fsConfig.loadDirSync<{
 				recordid: number;
 				primaryKey: number;
 				username: number;
+				domain: number;
 				password: number;
 				active: number;
 			}
@@ -158,22 +159,29 @@ const register = async (username: string, domain: string, password: string) => {
 	return true;
 };
 
-/* Bang */
-const log = join(__dirname, '..', 'auth.log');
+const log = (text: string) => {
+	try {
+		appendFileSync('/var/log/prosody/external-auth.log', text + '\n');
+	}catch(err){
+		console.log(`Unable to log: ${text}`);
+		console.error(err);
+	}
+};
 
+/* Bang */
 readline.on('line', async (line) => {
-	appendFileSync(log, `Received line: ${line}`);
+	log(`Received line: ${line}`);
 
 	try {
 		const results = await parseLine(line);
 
-		appendFileSync(log, `Line Results: ${results}`);
+		log(`Line Results: ${results}`);
 
 		console.log(results ? 1 : 0);
 	}catch(err){
 		debugLog(`Error processing line: ${err.message}`);
 
-		appendFileSync(log, `Line Error: ${err.message}`);
+		log(`Line Error: ${err.message}`);
 
 		console.log(0);
 	}
