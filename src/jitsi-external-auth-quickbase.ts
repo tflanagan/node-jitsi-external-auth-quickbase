@@ -19,6 +19,7 @@
 'use strict';
 
 /* Dependencies */
+import { appendFileSync } from 'fs';
 import { join } from 'path';
 import FSConfig from 'fs-config';
 import { debug } from 'debug';
@@ -74,19 +75,20 @@ const parseLine = async (line: string): Promise<boolean> => {
 
 	const action = parts[0];
 	const username = parts[1];
+	const domain = parts[2];
 	const password = parts.slice(3).join(':');
 
 	switch(action){
-		case 'auth':     return auth(username, password);
-		case 'isuser':   return isUser(username);
-		case 'setpass':  return setPass(username, password);
-		case 'register': return register(username, password);
+		case 'auth':     return auth(username, domain, password);
+		case 'isuser':   return isUser(username, domain);
+		case 'setpass':  return setPass(username, domain, password);
+		case 'register': return register(username, domain, password);
 		default:        throw new Error(`Unknown prosody protocol send: ${line}`);
 	}
 };
 
-const auth = async (username: string, password: string) => {
-	const user = await getUser(username);
+const auth = async (username: string, domain: string, password: string) => {
+	const user = await getUser(username, domain);
 
 	if(!user.get('active')){
 		throw new Error(`User ${username} is not active`);
@@ -101,12 +103,12 @@ const auth = async (username: string, password: string) => {
 	return true;
 };
 
-const isUser = async (username: string) => {
-	return !!(await getUser(username));
+const isUser = async (username: string, domain: string) => {
+	return !!(await getUser(username, domain));
 };
 
-const setPass = async (username: string, password: string) => {
-	const user = await getUser(username);
+const setPass = async (username: string, domain: string, password: string) => {
+	const user = await getUser(username, domain);
 	const newPassword = await hash(password, config.encryption.saltRounds);
 
 	user.set('password', newPassword);
@@ -118,33 +120,37 @@ const setPass = async (username: string, password: string) => {
 	return results.password === newPassword;
 };
 
-const getUser = async (username: string) => {
+const getUser = async (username: string, domain: string) => {
 	const results = await usersTable.runQuery({
-		where: `{'${usersTable.getFid('username')}'.EX.'${username}'}`
+		where: [
+			`{'${usersTable.getFid('username')}'.EX.'${username}'}`,
+			`{'${usersTable.getFid('domain')}'.EX.'${domain}'}`
+		].join('AND')
 	});
 
 	const record = results.records[0];
 
 	if(!record){
-		throw new Error(`User ${username} does not exist`);
+		throw new Error(`User ${username} does not exist in ${domain}`);
 	}
 
 	return record;
 };
 
-const register = async (username: string, password: string) => {
+const register = async (username: string, domain: string, password: string) => {
 	let exists = false;
 
 	try {
-		exists = await isUser(username);
+		exists = await isUser(username, domain);
 	}catch(ignore){}
 
 	if(exists){
-		throw new Error(`User ${username} already exists`);
+		throw new Error(`User ${username} already exists in ${domain}`);
 	}
 
 	await usersTable.upsertRecord({
 		username: username,
+		domain: domain,
 		password: await hash(password, config.encryption.saltRounds),
 		active: true
 	}, true);
@@ -153,13 +159,21 @@ const register = async (username: string, password: string) => {
 };
 
 /* Bang */
+const log = join(__dirname, '..', 'auth.log');
+
 readline.on('line', async (line) => {
+	appendFileSync(log, `Received line: ${line}`);
+
 	try {
 		const results = await parseLine(line);
+
+		appendFileSync(log, `Line Results: ${results}`);
 
 		console.log(results ? 1 : 0);
 	}catch(err){
 		debugLog(`Error processing line: ${err.message}`);
+
+		appendFileSync(log, `Line Error: ${err.message}`);
 
 		console.log(0);
 	}
