@@ -73,7 +73,7 @@ const parseLine = async (line: string): Promise<boolean> => {
 	const parts = line.split(':');
 
 	const action = parts[0];
-	const username = parts[2];
+	const username = parts[1];
 	const password = parts.slice(3).join(':');
 
 	switch(action){
@@ -133,7 +133,11 @@ const getUser = async (username: string) => {
 };
 
 const register = async (username: string, password: string) => {
-	const exists = await isUser(username);
+	let exists = false;
+
+	try {
+		exists = await isUser(username);
+	}catch(ignore){}
 
 	if(exists){
 		throw new Error(`User ${username} already exists`);
