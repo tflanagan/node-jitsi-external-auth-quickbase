@@ -22,14 +22,10 @@
 import { appendFileSync } from 'fs';
 import { join } from 'path';
 import FSConfig from 'fs-config';
-import { debug } from 'debug';
 import { QBTable } from 'qb-table';
 import { QuickBase } from 'quickbase';
 import { hash, compare } from 'bcrypt';
 import { createInterface } from 'readline';
-
-/* Debug */
-const debugLog = debug('jitsi-external-auth');
 
 /* Config */
 const fsConfig = new FSConfig();
@@ -65,11 +61,23 @@ const usersTable = new QBTable({
 	fids: config.quickbase.users.fids
 });
 
-const readline = createInterface({
-	input: process.stdin,
-	output: process.stdout,
-	terminal: false
-});
+const main = async (line: string) => {
+	log(`Received line: ${line}`);
+
+	try {
+		const results = await parseLine(line);
+
+		log(`Line Results: ${results}`);
+
+		console.log(results ? 1 : 0);
+		process.exit(results ? 0 : 1);
+	}catch(err){
+		log(`Line Error: ${err.message}`);
+
+		console.log(0);
+		process.exit(1);
+	}
+};
 
 const parseLine = async (line: string): Promise<boolean> => {
 	const parts = line.split(':');
@@ -84,7 +92,7 @@ const parseLine = async (line: string): Promise<boolean> => {
 		case 'isuser':   return isUser(username, domain);
 		case 'setpass':  return setPass(username, domain, password);
 		case 'register': return register(username, domain, password);
-		default:        throw new Error(`Unknown prosody protocol send: ${line}`);
+		default:         throw new Error(`Unknown prosody protocol send: ${line}`);
 	}
 };
 
@@ -161,28 +169,25 @@ const register = async (username: string, domain: string, password: string) => {
 
 const log = (text: string) => {
 	try {
-		appendFileSync('/var/log/prosody/external-auth.log', text + '\n');
+		appendFileSync('/var/log/prosody/external-auth.log', new Date().toUTCString() + ': ' + text + '\n');
 	}catch(err){
-		console.log(`Unable to log: ${text}`);
 		console.error(err);
 	}
 };
 
 /* Bang */
-readline.on('line', async (line) => {
-	log(`Received line: ${line}`);
-
-	try {
-		const results = await parseLine(line);
-
-		log(`Line Results: ${results}`);
-
-		console.log(results ? 1 : 0);
-	}catch(err){
-		debugLog(`Error processing line: ${err.message}`);
-
-		log(`Line Error: ${err.message}`);
-
-		console.log(0);
+if(process.argv.length > 2){
+	if(process.argv.length === 3){
+		main(process.argv[2]);
+	}else{
+		main(process.argv.slice(2).join(':'));
 	}
-});
+}else{
+	const readline = createInterface({
+		input: process.stdin,
+		output: process.stdout,
+		terminal: false
+	});
+
+	readline.on('line', main);
+}
